@@ -1,11 +1,17 @@
 #include <iostream>
+#include <cstdlib>
 #include <string.h>
 #include <pcap/pcap.h>
+#include "PtcHeaders.cpp"
 
 void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char * packet) 
 { 
-	static int count = 1; 
-	std::cout <<  count++ << ",   ";
+	static int count = 1;
+    //system("clear");
+	std::cout << "Packet №: " <<  count++ << std::endl;
+    std::cout << "Packet length: " << pkthdr->len << std::endl;
+	std::cout << "Data length " <<  pkthdr->caplen << std::endl;
+    std::cout << std::endl;
 	fflush(stdout);
 }
 
@@ -23,6 +29,8 @@ int main(int argc, char *argv[]) {
     std::string filterstr = "port 80 or 443";
     char *filter_exp;
     struct in_addr address;
+    const u_char *packet;
+    struct pcap_pkthdr header;
     static int pckcnt = 1;
 
 
@@ -75,6 +83,17 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
     std::cout << "Filter: " << filter_exp << "\n";
+    /* for(int i = 0; i < 1000; i++){
+        packet = pcap_next(descr, &header);
+        if (packet == NULL){ 
+            std::cout << "No packet found.\n";
+            continue;
+        }
+        std::cout << "Packet length: " << header.len << std::endl;
+        std::cout << "Captured packet length: " << header.caplen << std::endl;
+    } */
     pcap_loop(descr, -1, my_callback, NULL);
+    pcap_close(descr);
     std::cout << "\n";
+    return 0;
 }
