@@ -1,4 +1,16 @@
 #include<pcap/pcap.h>
+
+/* ethernet headers are always exactly 14 bytes */
+#define SIZE_ETHERNET 14
+
+const struct sniff_ethernet *ethernet; /* The ethernet header */
+const struct sniff_ip *ip; /* The IP header */
+const struct sniff_tcp *tcp; /* The TCP header */
+const char *payload; /* Packet payload */
+
+u_int size_ip;
+u_int size_tcp;
+
 /* Ethernet addresses are 6 bytes */
 #define ETHER_ADDR_LEN	6
 
@@ -52,3 +64,5 @@ struct sniff_tcp {
 	u_short th_sum;		/* checksum */
 	u_short th_urp;		/* urgent pointer */
 };
+
+
