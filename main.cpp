@@ -76,7 +76,7 @@ private:
 
 public:
     Output(in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, const struct pcap_pkthdr *pkthdr){
-        if (dstaddr.s_addr == ifaddr.s_addr){ //is incoming packet?
+        if (dstaddr.s_addr == ifaddr.s_addr){ // is incoming packet?
             this->hostaddr = srcaddr;
             this->packet_in = 1;
             this->packet_out = 0;
