@@ -70,24 +70,54 @@ struct sniff_tcp {
 
 class Output{
 private:
-    in_addr netaddr;
+    in_addr hostaddr;
     int packet_in, packet_out;
     int traffic_in, traffic_out;
 
 public:
-    Output(in_addr address, const struct pcap_pkthdr * pkthdr){
-        netaddr = address;
-        packet_in, packet_out = 0;
-        traffic_in, traffic_out = 0;
+    Output(in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, const struct pcap_pkthdr *pkthdr){
+        if (dstaddr.s_addr == ifaddr.s_addr){ //is incoming packet?
+            this->hostaddr = srcaddr;
+            this->packet_in = 1;
+            this->packet_out = 0;
+            this->traffic_in = pkthdr->len;
+            this->traffic_out = 0;
+        }
+        else{
+            this->hostaddr = dstaddr;
+            this->packet_out = 1;
+            this->packet_in = 0;
+            this->traffic_out = pkthdr->len;
+            this->traffic_in = 0;
+        }
     }
+    
+    in_addr GetHostaddr(){return this->hostaddr;}
+    int GetPacketIn(){return this->packet_in;}
+    int GetPacketOut(){return this->packet_out;}
+    int GetTrafficIn(){return this->traffic_in;}
+    int GetTrafficOut(){return this->traffic_out;}
+    void SetPacketIn(int a){this->packet_in += a;}
+    void SetPacketOut(int a){this->packet_out += a;}
+    void SetTrafficIn(int a){this->traffic_in += a;}
+    void SetTrafficOut(int a){this->traffic_out += a;}
+    
 
+    void Print(){
+        std::cout << inet_ntoa(hostaddr) <<"\t"
+        << packet_in + packet_out << " packets (" << packet_in << " IN / " << packet_out << " OUT)\t"
+        <<"Traffic: "<< traffic_in + traffic_out <<" ("<< traffic_in <<" IN / "<< traffic_out <<" OUT)"<< std::endl;
+    }
 };
 
 void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char * packet) 
 { 
 	static int count = 1;
-    //system("clear");
-	
+	static in_addr ifaddr;
+    ifaddr.s_addr = inet_addr((const char*)args);
+    in_addr checkip;
+    bool isNew = true;
+    bool incom = false;
    // static Output console;
 
     ethernet = (struct sniff_ethernet*)(packet);
@@ -95,20 +125,51 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
     size_ip = IP_HL(ip)*4;
     tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
     size_tcp = TH_OFF(tcp)*4;
-    /* if (size_ip < 20 || size_tcp < 20) {
-	    std::cout << "   * Invalid IP/TCP header length: "<< size_ip << " and " << size_tcp << "bytes\n";
-	    return;
-    } */
+    
 
     static std::vector<Output> hosts;
+
+    if(hosts.empty()){
+        Output host(ifaddr, ip->ip_src, ip->ip_dst, pkthdr);
+        hosts.push_back(host);
+    }
+    if(ifaddr.s_addr == ip->ip_dst.s_addr){ 
+        checkip = ip->ip_src; incom = true;
+    }else{checkip = ip->ip_dst;}
     
     
-    std::cout << args << std::endl;
+    for(int i = 0; i < hosts.size(); i++){
+        if(hosts[i].GetHostaddr().s_addr == checkip.s_addr){
+            isNew = false;
+            if(incom){
+                hosts[i].SetPacketIn(1);
+                hosts[i].SetTrafficIn(pkthdr->len);
+            }else{
+                hosts[i].SetPacketOut(1);
+                hosts[i].SetTrafficOut(pkthdr->len);
+            }
+        }
+    }
+
+    if(isNew){
+        Output host(ifaddr, ip->ip_src, ip->ip_dst, pkthdr);
+        hosts.push_back(host);
+    }
+
+
+    for(int i = 0; i < hosts.size(); i++){
+        hosts[i].Print();
+    }
+    for(int i = 0; i < hosts.size(); i++){
+        std::cout << "\33[A\33[2K";
+    }
+    
+    /* std::cout << ifaddr.s_addr << std::endl;
     std::cout << "Packet №: " <<  count << std::endl;
     std::cout << "IP/TCP header length: "<< size_ip << " and " << size_tcp << " bytes\n";
-    std::cout << "Source IP-addres: " << inet_ntoa(ip->ip_src) << std::endl;
-	std::cout << "Destenation IP-addres: " << inet_ntoa(ip->ip_dst) << std::endl << std::flush;
-    std::cout << "\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K";
+    std::cout << "Source IP-addres: " << ip->ip_src.s_addr << std::endl;
+	std::cout << "Destenation IP-addres: " << ip->ip_dst.s_addr << std::endl << std::flush;
+    std::cout << "\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K"; */
 
     count++;
 }
