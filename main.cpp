@@ -70,13 +70,13 @@ struct sniff_tcp {
 
 class Output{
 private:
-    in_addr ip;
+    in_addr netaddr;
     int packet_in, packet_out;
     int traffic_in, traffic_out;
 
 public:
     Output(in_addr address, const struct pcap_pkthdr * pkthdr){
-        ip = address;
+        netaddr = address;
         packet_in, packet_out = 0;
         traffic_in, traffic_out = 0;
     }
@@ -99,12 +99,16 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
 	    std::cout << "   * Invalid IP/TCP header length: "<< size_ip << " and " << size_tcp << "bytes\n";
 	    return;
     } */
-  
+
+    static std::vector<Output> hosts;
+    
+    
+    std::cout << args << std::endl;
     std::cout << "Packet №: " <<  count << std::endl;
     std::cout << "IP/TCP header length: "<< size_ip << " and " << size_tcp << " bytes\n";
-    std::cout << "Source IP-addres: " << pkthdr->len << std::endl;
-	std::cout << "Destenation IP-addres: " << pkthdr->caplen << std::endl << std::flush;
-    std::cout << "\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K";
+    std::cout << "Source IP-addres: " << inet_ntoa(ip->ip_src) << std::endl;
+	std::cout << "Destenation IP-addres: " << inet_ntoa(ip->ip_dst) << std::endl << std::flush;
+    std::cout << "\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K";
 
     count++;
 }
@@ -115,14 +119,14 @@ int main(int argc, char *argv[]) {
     pcap_t *descr;
     pcap_if_t *alldevs;
     struct bpf_program fp;
-    char *ip;
+    char *ifip;
     char mask[13];
     bpf_u_int32 ip_raw;
     bpf_u_int32 mask_raw;
     char errbuf[PCAP_ERRBUF_SIZE];
     std::string filterstr = "port 80 or 443";
     char *filter_exp;
-    struct in_addr address;
+    u_char *address;
     const u_char *packet;
     struct pcap_pkthdr header;
     static int pckcnt = 1;
@@ -131,13 +135,16 @@ int main(int argc, char *argv[]) {
     pcap_findalldevs(&alldevs, errbuf);
     for(pcap_addr_t *a=alldevs->addresses; a!=NULL; a=a->next) {
         if(a->addr->sa_family == AF_INET)
-            ip = inet_ntoa(((struct sockaddr_in*)a->addr)->sin_addr);
+            
+            ifip =inet_ntoa(((struct sockaddr_in*)a->addr)->sin_addr);
+            std::cout << "Set IP" << std::endl;
     } 
     std::string dev = alldevs->name;
-    
-    pcap_freealldevs(alldevs);
+    std::string ntaddr = ifip;
     std::cout << "Device: " << dev << "\t";
     device = &*dev.begin();
+    address = (u_char*)&*ntaddr.begin();
+    pcap_freealldevs(alldevs);
     
 
     pcap_lookupnet(device, &ip_raw, &mask_raw, errbuf);
@@ -147,29 +154,30 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::cout << "IP: " << ip << "\t";
+    std::cout << "IP: " << ntaddr << "\t";
 
-    address.s_addr = mask_raw;
+   /*  address.s_addr = mask_raw;
     strcpy(mask, inet_ntoa(address));
     if (mask == NULL) {
         perror("inet_ntoa");
         return 1;
     }
-    std::cout << "Netmask: " << mask << "\t";
-
+    std::cout << "Netmask: " << mask << "\t"; */
+    
     filter_exp = &*filterstr.begin();
     if(pcap_compile(descr, &fp, filter_exp, 0, mask_raw) == -1) {
 		std::cout << "\nError calling pcap_compile\n";
 		return 1;
 	}
-
+    
     if(pcap_setfilter(descr, &fp) == -1) {
 		std::cout << "\nError setting filter\n";
 		return 1;
 	}
     std::cout << "Filter: " << filter_exp << "\n";
+   
+    pcap_loop(descr, -1, my_callback, address);
     
-    pcap_loop(descr, -1, my_callback, NULL);
     pcap_close(descr);
     std::cout << "\n";
     return 0;
