@@ -68,6 +68,8 @@ struct sniff_tcp {
 	u_short th_urp;		/* urgent pointer */
 };
 
+
+
 class Output{
 private:
     in_addr hostaddr;
@@ -110,10 +112,36 @@ public:
     }
 };
 
+class TimeRanger { 
+protected:
+ time_t timePoint;
+ time_t timePeriod;
+ size_t tickCount;
+public:
+ TimeRanger(time_t period);
+ void Tick(std::vector<Output> hosts);
+};
+
+TimeRanger::TimeRanger (time_t period) : timePoint(time(NULL)), timePeriod(period), tickCount(0) { }
+
+void TimeRanger::Tick(std::vector<Output> hosts) {
+ time_t now = time(NULL);
+ if ((now - timePoint) >= timePeriod) {
+  for(int i = 0; i < hosts.size(); i++){
+        hosts[i].Print();
+    }
+    for(int i = 0; i < hosts.size(); i++){
+        std::cout << "\33[A\33[2K";
+    }
+  timePoint = now;
+ }
+}
+
 void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char * packet) 
 { 
 	static int count = 1;
 	static in_addr ifaddr;
+    static TimeRanger myWatch (5);
     ifaddr.s_addr = inet_addr((const char*)args);
     in_addr checkip;
     bool isNew = true;
@@ -156,13 +184,13 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
         hosts.push_back(host);
     }
 
-
-    for(int i = 0; i < hosts.size(); i++){
+    myWatch.Tick(hosts);
+    /* for(int i = 0; i < hosts.size(); i++){
         hosts[i].Print();
     }
     for(int i = 0; i < hosts.size(); i++){
         std::cout << "\33[A\33[2K";
-    }
+    } */
     
     /* std::cout << ifaddr.s_addr << std::endl;
     std::cout << "Packet №: " <<  count << std::endl;
@@ -180,6 +208,7 @@ int main(int argc, char *argv[]) {
     pcap_t *descr;
     pcap_if_t *alldevs;
     struct bpf_program fp;
+    time_t start = time(NULL);
     char *ifip;
     char mask[13];
     bpf_u_int32 ip_raw;
@@ -243,3 +272,4 @@ int main(int argc, char *argv[]) {
     std::cout << "\n";
     return 0;
 }
+
