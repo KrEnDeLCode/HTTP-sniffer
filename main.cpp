@@ -72,29 +72,50 @@ struct sniff_tcp {
 
 class Output{
 private:
-    in_addr hostaddr;
+    struct sockaddr_in haddr;
+    std::string hostname;
     int packet_in, packet_out;
     int traffic_in, traffic_out;
 
 public:
-    Output(in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, const struct pcap_pkthdr *pkthdr){
+    Output(in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, 
+    u_short sport, u_short dport, const struct pcap_pkthdr *pkthdr){
         if (dstaddr.s_addr == ifaddr.s_addr){ // is incoming packet?
-            this->hostaddr = srcaddr;
+            this->haddr.sin_addr = srcaddr;
+            this->haddr.sin_port = sport;
             this->packet_in = 1;
             this->packet_out = 0;
             this->traffic_in = pkthdr->len;
             this->traffic_out = 0;
         }
         else{
-            this->hostaddr = dstaddr;
-            this->packet_out = 1;
+            this->haddr.sin_addr = dstaddr;
+            this->haddr.sin_port = dport;
             this->packet_in = 0;
-            this->traffic_out = pkthdr->len;
+            this->packet_out = 1;
             this->traffic_in = 0;
+            this->traffic_out = pkthdr->len;
+            
         }
+
+        const char *address = inet_ntoa(haddr.sin_addr);
+
+        struct addrinfo filter = {0};
+        filter.ai_family = AF_INET;
+        struct addrinfo *result;
+        getaddrinfo(address, NULL, &filter, &result);
+
+
+        char host[NI_MAXHOST], serv[NI_MAXSERV];
+
+        for (struct addrinfo *aip = result; aip != NULL; aip = aip->ai_next){
+            getnameinfo(aip->ai_addr, aip->ai_addrlen, host, sizeof(host), serv, sizeof(serv), 0);
+        }
+
+        this->hostname = host;
     }
     
-    in_addr GetHostaddr(){return this->hostaddr;}
+    in_addr GetHostaddr(){return this->haddr.sin_addr;}
     int GetPacketIn(){return this->packet_in;}
     int GetPacketOut(){return this->packet_out;}
     int GetTrafficIn(){return this->traffic_in;}
@@ -106,9 +127,25 @@ public:
     
 
     void Print(){
-        std::cout << inet_ntoa(hostaddr) <<"\t"
+        //std::cout << inet_ntoa(haddr.sin_addr) <<"\t"
+        std::cout << hostname <<"\t\t"
         << packet_in + packet_out << " packets (" << packet_in << " IN / " << packet_out << " OUT)\t"
-        <<"Traffic: "<< traffic_in + traffic_out <<" ("<< traffic_in <<" IN / "<< traffic_out <<" OUT)"<< std::endl;
+        <<"Traffic: ";
+         if((traffic_in + traffic_out)/(1024*1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024*1024) << "GB";}
+    else if((traffic_in + traffic_out)/(1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024) << "MB";}
+    else if((traffic_in + traffic_out)/1024){std::cout << (traffic_in + traffic_out)/1024 << "KB";}
+    else{std::cout << traffic_in + traffic_out << "B";} 
+         std::cout << " (";
+          if((traffic_in)/(1024*1024*1024)){std::cout << (traffic_in)/(1024*1024*1024) << "GB";}
+    else if((traffic_in)/(1024*1024)){std::cout << (traffic_in)/(1024*1024) << "MB";}
+    else if((traffic_in)/1024){std::cout << (traffic_in)/1024 << "KB";}
+    else{std::cout << traffic_in << "B";}
+         std::cout << " IN / "; 
+         if((traffic_out)/(1024*1024*1024)){std::cout << (traffic_out)/(1024*1024*1024) << "GB";}
+    else if((traffic_out)/(1024*1024)){std::cout << (traffic_out)/(1024*1024) << "MB";}
+    else if((traffic_out)/1024){std::cout << (traffic_out)/1024 << "KB";}
+    else{std::cout << traffic_out << "B";} 
+         std::cout << " OUT)" << std::endl;
     }
 };
 
@@ -158,7 +195,7 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
     static std::vector<Output> hosts;
 
     if(hosts.empty()){
-        Output host(ifaddr, ip->ip_src, ip->ip_dst, pkthdr);
+        Output host(ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
         hosts.push_back(host);
     }
     if(ifaddr.s_addr == ip->ip_dst.s_addr){ 
@@ -180,24 +217,11 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
     }
 
     if(isNew){
-        Output host(ifaddr, ip->ip_src, ip->ip_dst, pkthdr);
+        Output host(ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
         hosts.push_back(host);
     }
 
     myWatch.Tick(hosts);
-    /* for(int i = 0; i < hosts.size(); i++){
-        hosts[i].Print();
-    }
-    for(int i = 0; i < hosts.size(); i++){
-        std::cout << "\33[A\33[2K";
-    } */
-    
-    /* std::cout << ifaddr.s_addr << std::endl;
-    std::cout << "Packet №: " <<  count << std::endl;
-    std::cout << "IP/TCP header length: "<< size_ip << " and " << size_tcp << " bytes\n";
-    std::cout << "Source IP-addres: " << ip->ip_src.s_addr << std::endl;
-	std::cout << "Destenation IP-addres: " << ip->ip_dst.s_addr << std::endl << std::flush;
-    std::cout << "\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K\33[A\33[2K"; */
 
     count++;
 }
@@ -245,14 +269,6 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "IP: " << ntaddr << "\t";
-
-   /*  address.s_addr = mask_raw;
-    strcpy(mask, inet_ntoa(address));
-    if (mask == NULL) {
-        perror("inet_ntoa");
-        return 1;
-    }
-    std::cout << "Netmask: " << mask << "\t"; */
     
     filter_exp = &*filterstr.begin();
     if(pcap_compile(descr, &fp, filter_exp, 0, mask_raw) == -1) {
