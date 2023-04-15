@@ -78,11 +78,12 @@ private:
     int traffic_in, traffic_out;
 
 public:
-    Output(in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, 
+    Output(std::string hostname, in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, 
     u_short sport, u_short dport, const struct pcap_pkthdr *pkthdr){
         if (dstaddr.s_addr == ifaddr.s_addr){ // is incoming packet?
             this->haddr.sin_addr = srcaddr;
             this->haddr.sin_port = sport;
+            this->hostname = hostname;
             this->packet_in = 1;
             this->packet_out = 0;
             this->traffic_in = pkthdr->len;
@@ -91,31 +92,17 @@ public:
         else{
             this->haddr.sin_addr = dstaddr;
             this->haddr.sin_port = dport;
+            this->hostname = hostname;
             this->packet_in = 0;
             this->packet_out = 1;
             this->traffic_in = 0;
             this->traffic_out = pkthdr->len;
             
         }
-
-        const char *address = inet_ntoa(haddr.sin_addr);
-
-        struct addrinfo filter = {0};
-        filter.ai_family = AF_INET;
-        struct addrinfo *result;
-        getaddrinfo(address, NULL, &filter, &result);
-
-
-        char host[NI_MAXHOST], serv[NI_MAXSERV];
-
-        for (struct addrinfo *aip = result; aip != NULL; aip = aip->ai_next){
-            getnameinfo(aip->ai_addr, aip->ai_addrlen, host, sizeof(host), serv, sizeof(serv), 0);
-        }
-
-        this->hostname = host;
     }
     
     in_addr GetHostaddr(){return this->haddr.sin_addr;}
+    std::string GetHostname(){return this->hostname;}
     int GetPacketIn(){return this->packet_in;}
     int GetPacketOut(){return this->packet_out;}
     int GetTrafficIn(){return this->traffic_in;}
@@ -128,24 +115,24 @@ public:
 
     void Print(){
         //std::cout << inet_ntoa(haddr.sin_addr) <<"\t"
-        std::cout << hostname <<"\t\t"
+        std::cout << hostname <<"\t\t\t"
         << packet_in + packet_out << " packets (" << packet_in << " IN / " << packet_out << " OUT)\t"
         <<"Traffic: ";
-         if((traffic_in + traffic_out)/(1024*1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024*1024) << "GB";}
-    else if((traffic_in + traffic_out)/(1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024) << "MB";}
-    else if((traffic_in + traffic_out)/1024){std::cout << (traffic_in + traffic_out)/1024 << "KB";}
-    else{std::cout << traffic_in + traffic_out << "B";} 
-         std::cout << " (";
-          if((traffic_in)/(1024*1024*1024)){std::cout << (traffic_in)/(1024*1024*1024) << "GB";}
-    else if((traffic_in)/(1024*1024)){std::cout << (traffic_in)/(1024*1024) << "MB";}
-    else if((traffic_in)/1024){std::cout << (traffic_in)/1024 << "KB";}
-    else{std::cout << traffic_in << "B";}
-         std::cout << " IN / "; 
-         if((traffic_out)/(1024*1024*1024)){std::cout << (traffic_out)/(1024*1024*1024) << "GB";}
-    else if((traffic_out)/(1024*1024)){std::cout << (traffic_out)/(1024*1024) << "MB";}
-    else if((traffic_out)/1024){std::cout << (traffic_out)/1024 << "KB";}
-    else{std::cout << traffic_out << "B";} 
-         std::cout << " OUT)" << std::endl;
+        if((traffic_in + traffic_out)/(1024*1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024*1024) << "GB";}
+        else if((traffic_in + traffic_out)/(1024*1024)){std::cout << (traffic_in + traffic_out)/(1024*1024) << "MB";}
+        else if((traffic_in + traffic_out)/1024){std::cout << (traffic_in + traffic_out)/1024 << "KB";}
+        else{std::cout << traffic_in + traffic_out << "B";} 
+        std::cout << " (";
+        if((traffic_in)/(1024*1024*1024)){std::cout << (traffic_in)/(1024*1024*1024) << "GB";}
+        else if((traffic_in)/(1024*1024)){std::cout << (traffic_in)/(1024*1024) << "MB";}
+        else if((traffic_in)/1024){std::cout << (traffic_in)/1024 << "KB";}
+        else{std::cout << traffic_in << "B";}
+        std::cout << " IN / "; 
+        if((traffic_out)/(1024*1024*1024)){std::cout << (traffic_out)/(1024*1024*1024) << "GB";}
+        else if((traffic_out)/(1024*1024)){std::cout << (traffic_out)/(1024*1024) << "MB";}
+        else if((traffic_out)/1024){std::cout << (traffic_out)/1024 << "KB";}
+        else{std::cout << traffic_out << "B";} 
+        std::cout << " OUT)" << std::endl;
     }
 };
 
@@ -181,9 +168,9 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
     static TimeRanger myWatch (5);
     ifaddr.s_addr = inet_addr((const char*)args);
     in_addr checkip;
+    std::string hostname;
     bool isNew = true;
     bool incom = false;
-   // static Output console;
 
     ethernet = (struct sniff_ethernet*)(packet);
     ip = (struct sniff_ip*)(packet + SIZE_ETHERNET);
@@ -194,17 +181,34 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
 
     static std::vector<Output> hosts;
 
+    const char *address = inet_ntoa(checkip);
+
+    struct addrinfo filter = {0};
+    filter.ai_family = AF_INET;
+    char host[NI_MAXHOST], serv[NI_MAXSERV];
+    struct addrinfo *result;
+
+    getaddrinfo(address, NULL, &filter, &result);
+
+    for (struct addrinfo *aip = result; aip != NULL; aip = aip->ai_next){
+        getnameinfo(aip->ai_addr, aip->ai_addrlen, host, sizeof(host), serv, sizeof(serv), 0);
+    }
+
+    hostname = host;
+    int pos = hostname.rfind(".");
+    pos = hostname.rfind(".", pos - 1);
+    hostname = hostname.erase(0, pos + 1);
+
     if(hosts.empty()){
-        Output host(ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
+        Output host(hostname, ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
         hosts.push_back(host);
     }
     if(ifaddr.s_addr == ip->ip_dst.s_addr){ 
         checkip = ip->ip_src; incom = true;
     }else{checkip = ip->ip_dst;}
     
-    
     for(int i = 0; i < hosts.size(); i++){
-        if(hosts[i].GetHostaddr().s_addr == checkip.s_addr){
+        if(hosts[i].GetHostname() == hostname){
             isNew = false;
             if(incom){
                 hosts[i].SetPacketIn(1);
@@ -217,7 +221,7 @@ void my_callback(u_char *args, const struct pcap_pkthdr * pkthdr, const u_char *
     }
 
     if(isNew){
-        Output host(ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
+        Output host(hostname, ifaddr, ip->ip_src, ip->ip_dst, tcp->th_sport, tcp->th_dport, pkthdr);
         hosts.push_back(host);
     }
 
