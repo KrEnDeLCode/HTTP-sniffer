@@ -3,9 +3,7 @@
 #include <string.h>
 #include <vector>
 #include <pcap/pcap.h>
-#include "callback.h"
-//#include "PtcHeaders.h"
-//#include "Output.h"
+#include "callback.hpp"
 
 int main(int argc, char *argv[]) {
 
@@ -32,7 +30,6 @@ int main(int argc, char *argv[]) {
         if(a->addr->sa_family == AF_INET)
             
             ifip =inet_ntoa(((struct sockaddr_in*)a->addr)->sin_addr);
-            std::cout << "Set IP" << std::endl;
     } 
     std::string dev = alldevs->name;
     std::string ntaddr = ifip;

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <vector>
 #include <pcap/pcap.h>
-#include "Output.h"
+#include "Output.hpp"
 
 class TimeRanger { 
 protected:

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <vector>
 #include <pcap/pcap.h>
-#include "Output.h"
+#include "Output.hpp"
 
 
     Output::Output(std::string hostname, in_addr ifaddr, const in_addr srcaddr, const in_addr dstaddr, 

@@ -1,7 +1,7 @@
 #pragma once
 #include <ctime>
 #include <vector>
-#include "Output.h"
+#include "Output.hpp"
 
 class TimeRanger { 
 protected:
