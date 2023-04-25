@@ -5,4 +5,5 @@
 <br>
 Требования: <br>
 - OS Linux <br>
-- установленная библиотека libpcap (sudo apt-get install libpcap-dev)
+- установленная библиотека libpcap (sudo apt-get install libpcap-dev) <br>
+- установленная система сборки CMake (sudo apt install cmake) <br>
